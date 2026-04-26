@@ -86,6 +86,34 @@ Resultado de la Visión Clásica (Filtro Canny). El sistema es incapaz de separa
 ![Resultado IA]
 Resultado con FastSAM. La red neuronal aísla perfectamente cada instancia de forma robusta, generando máscaras precisas ignorando las oclusiones y cambios de luz.*
 
+### Ajuste de hiperparametros
+
+iteración 20260426_224534
+Clásico: Canny → HoughCircles (minDist=7%, param2=35, minRadius=3%)
+IA: .plot() → renderizado manual con paleta de colores + transparencia 45%
+Filtro área máscaras: 0.3%–25% de imagen
+Problema: HoughCircles detectaba agujeros interiores (doble conteo)
+
+
+Iteración 20260426_225935
+filtrar_circulos_anidados: descarta círculos contenidos dentro de otro (distancia + r < pr * 1.05)
+Resultado: 16 clásico / 22 IA (real: 10)
+
+
+Iteración 20260426_231006
+minDist: 7% → 12% (más separación entre centros)
+param2: 35 → 40 (más estricto, menos falsos positivos)
+Filtro anidados: contención exacta → solapamiento 60% (más tolerante a descentrados)
+conf IA: 0.4 → 0.6
+Filtro de circularidad 4πA/P² > 0.35 → descarta fragmentos irregulares
+Resultado: 8 clásico / 17 IA (real: 10)
+
+
+Iteración 20260426_231207
+param2: 40 → 36 
+IA: supresión por centroide → máscaras ordenadas por área, se descarta cualquiera cuyo centro cae dentro de una ya aceptada → elimina agujeros interiores como el #65
+Resultado: ~10 clásico / ~10 IA 
+
 ## 4. Experimento 2: Control de Calidad e Integridad (Defectos)
 
 La inspección de calidad busca identificar arañazos o marcas en superficies mecánicas.
