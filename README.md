@@ -6,8 +6,6 @@
 - **Asignatura:** Visión por Computador 
 - **Universidad:** Universitat Rovira i Virgili (URV)
 - **Autores:** Marina Oteiza Álvarez, Susana Triviño Nortes, Angelina Ruiz Jiménez
-- **Fecha:** [Añadir Mes y Año]
-- **Enlace al repositorio (Código fuente):** [Añadir vuestro enlace de GitHub aquí]
 
 ---
 
@@ -80,13 +78,13 @@ Se ha desarrollado un script en Python (`experimento_bin_picking.py`) que proces
 ### Resultados obtenidos (data\resultados_bin_picking/)
 
 ![Imagen Original]
-*Figura 1: Imagen original de piezas metálicas amontonadas.*
+Imagen original de piezas metálicas amontonadas.*
 
 ![Resultado Clásico]
-*Figura 2: Resultado de la Visión Clásica (Filtro Canny). El sistema es incapaz de separar las piezas debido a los reflejos y sombras, detectando un exceso de ruido perjudicial para la cinemática del robot.*
+Resultado de la Visión Clásica (Filtro Canny). El sistema es incapaz de separar las piezas debido a los reflejos y sombras, detectando un exceso de ruido perjudicial para la cinemática del robot.*
 
 ![Resultado IA]
-*Figura 3: Resultado con FastSAM. La red neuronal aísla perfectamente cada instancia de forma robusta, generando máscaras precisas ignorando las oclusiones y cambios de luz.*
+Resultado con FastSAM. La red neuronal aísla perfectamente cada instancia de forma robusta, generando máscaras precisas ignorando las oclusiones y cambios de luz.*
 
 ## 4. Experimento 2: Control de Calidad e Integridad (Defectos)
 
@@ -98,15 +96,10 @@ A través del script `experimento_defectos.py`, analizamos imágenes de superfic
 ### Resultados obtenidos (data\resultados_defectos)
 
 ![Defecto Original]
-*Figura 4: Imagen de una superficie metálica con defectos.*
+Imagen de una superficie metálica con defectos.*
 
-![Detección Thresholding](RUTA_A_VUESTRA_IMAGEN_CAJAS_ROJAS)
-*Figura 5: Detección clásica por Thresholding.*
+![Detección Thresholding] 
+Detección clásica por Thresholding.*
 
 ### Análisis del resultado
 Aunque el algoritmo clásico ha logrado enmarcar el defecto, el código requiere introducir un valor de umbral rígido programado manualmente (en nuestro caso, `100`). Hemos comprobado que si la imagen es ligeramente más oscura o más clara, este valor deja de funcionar, generando falsos positivos o ignorando el rasguño. Esto corrobora empíricamente las referencias analizadas: para una línea de producción real, es imperativo el uso de IA (Aprendizaje No Supervisado) capaz de adaptarse dinámicamente a la variabilidad lumínica y de textura de la fábrica.
-
-## 5. Reproducción de los Experimentos (Pasos para ejecutar)
-
-El código fuente de este proyecto ha sido diseñado para ser fácilmente reproducible. Para ejecutar los experimentos localmente, es necesario disponer de un entorno con Python 3.
-
