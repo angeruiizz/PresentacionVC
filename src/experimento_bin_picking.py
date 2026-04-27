@@ -5,12 +5,37 @@ from datetime import datetime
 from ultralytics import FastSAM
 
 input_dir = 'data/pile_of_metal_washers'
+
+# ==============================================================
+#  HIPERPARÁMETROS — solo tocar estas líneas entre experimentos
+# ==============================================================
+
+# --- Clásico (HoughCircles) ---
+MIN_DIST_RATIO  = 0.18  # distancia mínima entre centros (% del lado corto)
+                          #   bajo  (0.05-0.08) → más detecciones, más falsos positivos
+                          #   alto  (0.14-0.20) → menos detecciones, más pérdidas
+PARAM2          = 45      # umbral del acumulador de Hough
+                          #   bajo  (25-32) → muy sensible, detecta arcos débiles
+                          #   alto  (42-50) → solo acepta círculos muy nítidos
+MIN_RADIUS_RATIO = 0.04  # radio mínimo aceptado (% del lado corto)
+MAX_RADIUS_RATIO = 0.22  # radio máximo aceptado (% del lado corto)
+
+# --- IA (FastSAM) ---
+CONF_IA         = 0.75   # confianza mínima de segmentación
+                          #   bajo  (0.3-0.45) → detecta más piezas, incluso parciales
+                          #   alto  (0.65-0.80) → solo piezas muy visibles y claras
+CIRCULARIDAD_MIN = 0.50  # filtro de forma: 1.0 = círculo perfecto, 0.0 = cualquier forma
+
+# ==============================================================
+
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 output_dir = os.path.join('data/resultados_bin_picking', timestamp)
 os.makedirs(output_dir, exist_ok=True)
 
 print("=== EXPERIMENTO 1: BIN PICKING ===")
 print("Comparando Visión Clásica vs Deep Learning en múltiples imágenes...\n")
+print(f"Config clásico → minDist={MIN_DIST_RATIO*100:.0f}%, param2={PARAM2}")
+print(f"Config IA      → conf={CONF_IA}, circularidad>{CIRCULARIDAD_MIN}\n")
 
 model = FastSAM('FastSAM-s.pt')
 
@@ -68,11 +93,11 @@ for filename in os.listdir(input_dir):
         blurred,
         cv2.HOUGH_GRADIENT,
         dp=1.2,
-        minDist=int(min(h, w) * 0.12),   # más separación mínima entre centros
+        minDist=int(min(h, w) * MIN_DIST_RATIO),
         param1=80,
-        param2=36,                         # equilibrio entre falsos positivos y perdidas
-        minRadius=int(min(h, w) * 0.04),
-        maxRadius=int(min(h, w) * 0.22),
+        param2=PARAM2,
+        minRadius=int(min(h, w) * MIN_RADIUS_RATIO),
+        maxRadius=int(min(h, w) * MAX_RADIUS_RATIO),
     )
 
     num_clasico = 0
@@ -98,7 +123,7 @@ for filename in os.listdir(input_dir):
     print(f"  -> Clásico: {num_clasico} arandelas detectadas")
 
     # --- 2. DEEP LEARNING (IA): máscaras manuales ---
-    results = model(image_path, conf=0.6, iou=0.9, verbose=False)
+    results = model(image_path, conf=CONF_IA, iou=0.9, verbose=False)
     img_ia = img_original.copy()
     overlay = img_ia.copy()
 
@@ -123,7 +148,7 @@ for filename in os.listdir(input_dir):
             if perimetro == 0:
                 continue
             circularidad = 4 * np.pi * area / (perimetro ** 2)
-            if circularidad < 0.35:  # descarta formas muy alargadas o irregulares
+            if circularidad < CIRCULARIDAD_MIN:
                 continue
             mascaras_validas.append(m_resized)
 

@@ -44,7 +44,7 @@ Para evitar conflictos con las librerías de tu sistema operativo, recomendamos 
 
 ```bash
 #lonar el repositorio**
-git clone [Añadir vuestro enlace de GitHub aquí]
+git clone https://github.com/Sus306/PresentacionVC.git
 cd PresentacionVC
 
 # Crear el entorno virtual en la raíz del proyecto
@@ -66,7 +66,7 @@ python ./src/experimento_defectos.py
 
 ---
 
-## 4. Experimento 1: Segmentación de Instancias para *Bin Picking*
+## 4. Experimento 1 — Bin Picking
 
 El "Bin Picking" requiere que el robot identifique piezas individuales dentro de un contenedor desordenado.
 
@@ -75,44 +75,110 @@ Se ha desarrollado un script en Python (`experimento_bin_picking.py`) que proces
 - **Enfoque Clásico:** Se aplicó un filtro Gaussiano y el algoritmo de detección de bordes de Canny mediante OpenCV.
 - **Enfoque Moderno (IA):** Se implementó *FastSAM* (Segment Anything Model), un modelo fundacional *Zero-Shot* de la librería Ultralytics.
 
-### Resultados obtenidos (data\resultados_bin_picking/)
+Comparativa de 3 iteraciones de ajuste de hiperparámetros sobre 3 escenas distintas.  
+Ground truth conocido únicamente en la **imagen mixta** (10 piezas reales).
 
-![Imagen Original]
-Imagen original de piezas metálicas amontonadas.*
+---
 
-![Resultado Clásico]
-Resultado de la Visión Clásica (Filtro Canny). El sistema es incapaz de separar las piezas debido a los reflejos y sombras, detectando un exceso de ruido perjudicial para la cinemática del robot.*
+## Iteración 1 — Configuración base (permisiva)
 
-![Resultado IA]
-Resultado con FastSAM. La red neuronal aísla perfectamente cada instancia de forma robusta, generando máscaras precisas ignorando las oclusiones y cambios de luz.*
+```
+MIN_DIST_RATIO   = 0.07
+PARAM2           = 28
+CONF_IA          = 0.4
+CIRCULARIDAD_MIN = 0.25
+```
 
-### Ajuste de hiperparametros
+| Imagen | Clásico | IA | Real |
+|---|---|---|---|
+| Apiladas | 124 | 68 | — |
+| Dispersas | ~30 | 13 | — |
+| Mixta | 11 | 10 | 10 |
 
-iteración 20260426_224534
-Clásico: Canny → HoughCircles (minDist=7%, param2=35, minRadius=3%)
-IA: .plot() → renderizado manual con paleta de colores + transparencia 45%
-Filtro área máscaras: 0.3%–25% de imagen
-Problema: HoughCircles detectaba agujeros interiores (doble conteo)
+### Imagen apiladas
+`param2=28` acepta arcos muy débiles → HoughCircles detecta 124 círculos, incluyendo agujeros interiores y reflejos. `conf=0.4` hace que FastSAM acepte máscaras poco fiables → 68 detecciones con fragmentos y agujeros incluidos. Ambos métodos sobredetectan severamente.
 
+### Imagen dispersas
+HoughCircles detecta múltiples círculos por arandela (anillo exterior + agujero interior) al no tener filtro de anidados. FastSAM con `circularidad=0.25` acepta formas poco redondas pero contiene el ruido.
 
-Iteración 20260426_225935
-filtrar_circulos_anidados: descarta círculos contenidos dentro de otro (distancia + r < pr * 1.05)
-Resultado: 16 clásico / 22 IA (real: 10)
+### Imagen mixta
+Mejor resultado del clásico en esta escena (11 vs 10 real). Las piezas dispersas tienen borde completo → suficientes votos. FastSAM también acierta con 10. La configuración permisiva funciona bien cuando no hay oclusión.
 
+> **Conclusión:** Umbral bajo = máxima sensibilidad → ambos métodos sobredetectan con oclusión. El clásico confunde agujeros con piezas, la IA acepta fragmentos irregulares. Funciona bien solo en escenas simples.
 
-Iteración 20260426_231006
-minDist: 7% → 12% (más separación entre centros)
-param2: 35 → 40 (más estricto, menos falsos positivos)
-Filtro anidados: contención exacta → solapamiento 60% (más tolerante a descentrados)
-conf IA: 0.4 → 0.6
-Filtro de circularidad 4πA/P² > 0.35 → descarta fragmentos irregulares
-Resultado: 8 clásico / 17 IA (real: 10)
+---
 
+## Iteración 2 — Ajuste moderado
 
-Iteración 20260426_231207
-param2: 40 → 36 
-IA: supresión por centroide → máscaras ordenadas por área, se descarta cualquiera cuyo centro cae dentro de una ya aceptada → elimina agujeros interiores como el #65
-Resultado: ~10 clásico / ~10 IA 
+```
+MIN_DIST_RATIO   = 0.12
+PARAM2           = 36
+CONF_IA          = 0.6
+CIRCULARIDAD_MIN = 0.35
+```
+
+| Imagen | Clásico | IA | Real |
+|---|---|---|---|
+| Apiladas | 20 | 33 | — |
+| Dispersas | ~10 | 13 | — |
+| Mixta | 8 | **10** ✓ | 10 |
+
+### Imagen apiladas
+`minDist=12%` reduce falsos positivos del clásico (124→20) pero sigue subestimando por oclusión estructural. FastSAM baja de 68 a 33 gracias a `conf=0.6` — descarta máscaras poco confiables — pero sigue sobredetectando en escenas densas.
+
+### Imagen dispersas
+`param2=36` con `minDist=12%` reduce duplicados en el clásico. FastSAM mantiene resultados estables — `circularidad=0.35` empieza a filtrar mejor los fragmentos irregulares entre piezas de distintos tamaños.
+
+### Imagen mixta
+FastSAM alcanza exactamente 10 — **mejor resultado de la IA en toda la experimentación**. Los filtros más estrictos eliminan fragmentos sin perder piezas reales. HoughCircles baja a 8 — `param2=36` es más exigente y pierde 2 piezas con borde parcial.
+
+> **Conclusión:** Subir `param2` y `conf` reduce el ruido en ambos métodos. El clásico empieza a perder piezas reales mientras la IA mantiene precisión. Primera divergencia clara entre métodos.
+
+---
+
+## Iteración 3 — Ajuste estricto
+
+```
+MIN_DIST_RATIO   = 0.18
+PARAM2           = 45
+CONF_IA          = 0.75
+CIRCULARIDAD_MIN = 0.50
+```
+
+| Imagen | Clásico | IA | Real |
+|---|---|---|---|
+| Apiladas | 17 | 20 | — |
+| Dispersas | ~11 | 13 | — |
+| Mixta | 8 | **10** ✓ | 10 |
+
+### Imagen apiladas
+Configuración muy restrictiva — HoughCircles baja a 17, perdiendo muchas piezas reales al exigir bordes muy nítidos que la oclusión impide. FastSAM también baja a 20, su mínimo histórico en esta imagen, pero sigue siendo más cercano a la realidad que el clásico.
+
+### Imagen dispersas
+`circularidad=0.50` es el filtro más estricto probado — FastSAM mantiene 13, estable desde la iteración anterior. El clásico con `param2=45` pierde piezas pequeñas y de borde irregular que antes detectaba.
+
+### Imagen mixta
+FastSAM mantiene 10 por tercera iteración consecutiva — demuestra robustez ante cambios de hiperparámetros en escenas sin oclusión severa. HoughCircles se queda en 8 igual que en la iteración anterior — el ajuste fino ya no mejora ni empeora al clásico en esta escena.
+
+> **Conclusión:** Configuración muy estricta — FastSAM se mantiene estable, HoughCircles pierde demasiadas piezas reales. El ajuste fino penaliza más al método clásico. La IA generaliza mejor ante distintas configuraciones.
+
+---
+
+## Conclusión global del experimento
+
+| | HoughCircles | FastSAM |
+|---|---|---|
+| Escenas simples (sin oclusión) | ✓ Funciona bien con param2 bajo | ✓ Funciona bien en todas las configuraciones |
+| Escenas con oclusión densa | ✗ Falla estructuralmente | ⚠ Sobredetecta pero se acerca más |
+| Sensibilidad a hiperparámetros | Alta — resultados muy variables | Baja — resultados estables |
+| Ground truth (10 piezas) | Máximo: 11 (It.1) — Mínimo: 8 | Máximo: 10 ✓ (It.2,3,4) |
+
+### Por qué falla el clásico con oclusión
+HoughCircles necesita ver suficiente borde continuo para acumular votos. Con piezas apiladas, la oclusión rompe ese borde → pocos votos por círculo → el sistema falla independientemente del `param2`. No es un problema de configuración, es una limitación estructural del método.
+
+### Por qué la IA generaliza mejor
+FastSAM segmenta regiones coherentes de textura, no formas geométricas predefinidas. Con oclusión parcial, la región sigue siendo visible → FastSAM la segmenta aunque el borde esté incompleto. Los filtros post-proceso (área, circularidad, centroide) corrigen los falsos positivos sin necesidad de reentrenamiento.
+
 
 ## 4. Experimento 2: Control de Calidad e Integridad (Defectos)
 
